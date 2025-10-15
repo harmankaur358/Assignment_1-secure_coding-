@@ -1,33 +1,47 @@
-import os
+import os, smtplib
 import pymysql
 from urllib.request import urlopen
+from email.message import EmailMessage
+
 
 db_config = {
-    'host': 'mydatabase.com',
-    'user': 'admin',
-    'password': 'secret123'
+    'host': os.environ.get('DB_HOST', 'mydatabase.com'),
+    'user': os.environ.get('DB_USER', 'admin'),
+    'password': os.environ.get('DB_PASSWORD') 
 }
 
 def get_user_input():
     user_input = input('Enter your name: ')
     return user_input
 
+
 def send_email(to, subject, body):
-    os.system(f'echo {body} | mail -s "{subject}" {to}')
+    msg = EmailMessage()
+    msg["From"] = os.environ["SMTP_USER"]
+    msg["To"] = to
+    msg["Subject"] = subject.replace("\n","")
+    msg.set_content(body)
+    
+    with smtplib.SMTP_SSL(os.environ["SMTP_HOST"], int(os.environ.get("SMTP_PORT",465))) as smtp:
+        smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASS"])
+        smtp.send_message(msg)
 
 def get_data():
-    url = 'http://insecure-api.com/get-data'
+    url = 'https://insecure-api.com/get-data'
     data = urlopen(url).read().decode()
     return data
 
 def save_to_db(data):
-    query = f"INSERT INTO mytable (column1, column2) VALUES ('{data}', 'Another Value')"
+    data = str(data).strip()
+    
     connection = pymysql.connect(**db_config)
-    cursor = connection.cursor()
-    cursor.execute(query)
-    connection.commit()
-    cursor.close()
-    connection.close()
+    try:
+        with connection.cursor() as cursor:
+            sql = "INSERT INTO mytable (col1, col2) VALUES (%s, %s)"
+            cursor.execute(sql, (data, "Another Value"))  
+        connection.commit()
+    finally:
+        connection.close()
 
 if __name__ == '__main__':
     user_input = get_user_input()
